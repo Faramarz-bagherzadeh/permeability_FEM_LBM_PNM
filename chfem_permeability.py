@@ -137,7 +137,8 @@ def process_permeability_folder(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     rows = []
-    for image in files:
+    for image in files[:10]:
+        print(f"Processing {image.name}...")
         domain = tifffile.imread(image)
         result = compute_directional_permeability(
             domain, voxel_size=voxel_size, solver=solver,
@@ -167,7 +168,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run CHFEM permeability and velocity export for TIFF images")
-    parser.add_argument("image_folder")
-    parser.add_argument("output_dir")
+    parser.add_argument("--input_dir", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, required=True)
     args = parser.parse_args()
-    process_permeability_folder(args.image_folder, args.output_dir)
+    print("Input directory:", args.input_dir)
+    print("Output directory:", args.output_dir)
+    try:
+        process_permeability_folder(args.input_dir, args.output_dir)
+    except:
+        print ("An error occurred during processing. Maybe not permeable?")
