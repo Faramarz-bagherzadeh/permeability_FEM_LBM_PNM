@@ -173,7 +173,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print("Input directory:", args.input_dir)
     print("Output directory:", args.output_dir)
-    try:
-        process_permeability_folder(args.input_dir, args.output_dir)
-    except:
-        print ("An error occurred during processing. Maybe not permeable?")
+
+    process_permeability_folder(args.input_dir, args.output_dir)
