@@ -90,8 +90,7 @@ def compute_directional_permeability(
                 # returns input spatial shape + (ux, uy, uz).
                 velocity_file = Path(f"{prefix}_velocity_{'xyz'.index(direction)}.bin")
                 velocity = chfem.import_vector_field_from_chfem(
-                    str(velocity_file), domain.shape, correct_direction=direction
-                )
+                    str(velocity_file), domain.shape)
                 path = field_dir / f"velocity_{direction}.npy"
                 np.save(path, velocity)
                 paths[direction] = str(path)
