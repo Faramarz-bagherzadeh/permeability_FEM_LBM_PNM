@@ -1,11 +1,11 @@
 #!/bin/bash -l
 #SBATCH --account=glaz.glaz
 #SBATCH --partition=gpu
-#SBATCH --gpus=a40:2
+#SBATCH --gpus=a40:1
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node 1
 #SBATCH --qos=48h
-#SBATCH --cpus-per-task 120
+#SBATCH --cpus-per-task 32
 #SBATCH --time=47:00:00
 #SBATCH --job-name=Permeability
 #SBATCH --output=/albedo/work/user/fabagh001/chfem/logs/log_%A_%a.out
@@ -16,7 +16,8 @@ module load conda
 module load cuda
 conda activate chfem39
 
-INPUT_DIR="/albedo/work/projects/p_ICECTai/B51_processed/samples"
+##INPUT_DIR="/albedo/work/projects/p_ICECTai/B51_processed/samples"
+INPUT_DIR="/albedo/work/user/fabagh001/chfem/test_samples"
 OUTPUT_DIR="/albedo/work/user/fabagh001/chfem/results"
 
 python -u "chfem_permeability.py" \
