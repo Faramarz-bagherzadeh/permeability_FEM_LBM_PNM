@@ -1,11 +1,11 @@
 #!/bin/bash -l
 #SBATCH --account=glaz.glaz
 #SBATCH --partition=gpu
-#SBATCH --gpus=a40:1
+#SBATCH --gpus=1
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node 1
 #SBATCH --qos=48h
-#SBATCH --cpus-per-task 32
+#SBATCH --cpus-per-task 28
 #SBATCH --time=47:00:00
 #SBATCH --job-name=Permeability
 #SBATCH --output=/albedo/work/user/fabagh001/chfem/logs/log_%A_%a.out
