@@ -22,8 +22,17 @@ OUTPUT_DIR="/albedo/work/user/fabagh001/chfem/results"
 SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
 METADATA_FILE="$SCRIPT_DIR/B51.xlsx"
 BATCH_SIZE="${BATCH_SIZE:-50}"
+MAX_FILES="${MAX_FILES:-4}"
 TASK_OUTPUT_DIR="$OUTPUT_DIR/task_${SLURM_ARRAY_TASK_ID}"
 FILE_OFFSET=$((SLURM_ARRAY_TASK_ID * BATCH_SIZE))
+FILE_LIMIT="$BATCH_SIZE"
+if (( MAX_FILES > 0 && FILE_OFFSET + FILE_LIMIT > MAX_FILES )); then
+    FILE_LIMIT=$((MAX_FILES - FILE_OFFSET))
+fi
+if (( FILE_LIMIT <= 0 )); then
+    echo "Array task $SLURM_ARRAY_TASK_ID is beyond the requested file limit; skipping."
+    exit 0
+fi
 
 python -u "$SCRIPT_DIR/chfem_permeability.py" \
     --input_dir "$INPUT_DIR" \
@@ -31,4 +40,4 @@ python -u "$SCRIPT_DIR/chfem_permeability.py" \
     --metadata_file "$METADATA_FILE" \
     --porosity_threshold 0.02 \
     --file_offset "$FILE_OFFSET" \
-    --file_limit "$BATCH_SIZE"
+    --file_limit "$FILE_LIMIT"

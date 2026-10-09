@@ -7,8 +7,10 @@ using ``direction="all"``.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, TemporaryFile
+import zlib
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -16,31 +18,6 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import tifffile
 
-
-
-def _write_float32_binary(
-    file_object,
-    array: np.ndarray,
-) -> None:
-    """Write an array as big-endian float32 one z-slice at a time."""
-    for z_slice in array:
-        values = np.asarray(z_slice, dtype=">f4")
-        file_object.write(values.tobytes(order="C"))
-
-
-def _write_zero_float32_binary(
-    file_object,
-    value_count: int,
-    *,
-    chunk_size: int = 1_048_576,
-) -> None:
-    """Write a zero-filled Legacy VTK binary block without a full-size array."""
-    zero_chunk = np.zeros(min(value_count, chunk_size), dtype=">f4")
-    remaining = value_count
-    while remaining:
-        count = min(remaining, zero_chunk.size)
-        file_object.write(zero_chunk[:count].tobytes(order="C"))
-        remaining -= count
 
 
 def _write_vti(
@@ -62,54 +39,84 @@ def _write_vti(
             f"expected shape {expected_velocity_shape}"
         )
 
-    array_specs = [("image", 1, cell_count)]
+    array_specs = [("image", 1, "UInt8", domain, np.dtype("u1"))]
     array_specs.extend(
-        (f"velocity_{direction}", 3, cell_count * 3)
-        for direction in "xyz"
+        (
+            f"velocity_{direction}",
+            3,
+            "Float32",
+            None if velocity_fields is None else velocity_fields[..., index, :],
+            np.dtype(">f4"),
+        )
+        for index, direction in enumerate("xyz")
     )
-    offsets = []
-    offset = 0
-    for _, _, value_count in array_specs:
-        offsets.append(offset)
-        offset += 8 + value_count * 4
 
-    header = [
-        '<?xml version="1.0"?>\n',
-        '<VTKFile type="ImageData" version="1.0" byte_order="BigEndian" '
-        'header_type="UInt64">\n',
-        f'<ImageData WholeExtent="0 {nx} 0 {ny} 0 {nz}" '
-        f'Origin="0 0 0" Spacing="{voxel_size:.17g} '
-        f'{voxel_size:.17g} {voxel_size:.17g}">\n',
-        f'<Piece Extent="0 {nx} 0 {ny} 0 {nz}">\n',
-        '<CellData Scalars="image">\n',
-    ]
-    for (name, components, _), data_offset in zip(array_specs, offsets):
-        component_attribute = (
-            f' NumberOfComponents="{components}"' if components > 1 else ""
-        )
-        header.append(
-            f'<DataArray type="Float32" Name="{name}"{component_attribute} '
-            f'format="appended" offset="{data_offset}"/>\n'
-        )
-    header.extend([
-        '</CellData>\n',
-        '<PointData/>\n',
-        '</Piece>\n',
-        '</ImageData>\n',
-        '<AppendedData encoding="raw">_',
-    ])
+    with ExitStack() as staged_files:
+        staged_arrays = []
+        for _, components, _, array, dtype in array_specs:
+            block_size = ny * nx * components * dtype.itemsize
+            staged_payload = staged_files.enter_context(TemporaryFile())
+            compressed_sizes = []
+            for z_index in range(nz):
+                if array is None:
+                    raw_block = bytes(block_size)
+                else:
+                    raw_block = np.asarray(array[z_index], dtype=dtype).tobytes(
+                        order="C"
+                    )
+                compressed_block = zlib.compress(raw_block, level=1)
+                staged_payload.write(compressed_block)
+                compressed_sizes.append(len(compressed_block))
+            staged_payload.seek(0)
+            staged_arrays.append((staged_payload, compressed_sizes, block_size))
 
-    with output_path.open("wb") as vti_file:
-        vti_file.write("".join(header).encode("ascii"))
-        vti_file.write((cell_count * 4).to_bytes(8, byteorder="big"))
-        _write_float32_binary(vti_file, domain)
-        for index in range(3):
-            vti_file.write((cell_count * 3 * 4).to_bytes(8, byteorder="big"))
-            if velocity_fields is None:
-                _write_zero_float32_binary(vti_file, cell_count * 3)
-            else:
-                _write_float32_binary(vti_file, velocity_fields[..., index, :])
-        vti_file.write(b'</AppendedData>\n</VTKFile>\n')
+        offsets = []
+        offset = 0
+        for _, compressed_sizes, _ in staged_arrays:
+            offsets.append(offset)
+            offset += (3 + len(compressed_sizes)) * 8 + sum(compressed_sizes)
+
+        header = [
+            '<?xml version="1.0"?>\n',
+            '<VTKFile type="ImageData" version="1.0" byte_order="BigEndian" '
+            'header_type="UInt64" compressor="vtkZLibDataCompressor">\n',
+            f'<ImageData WholeExtent="0 {nx} 0 {ny} 0 {nz}" '
+            f'Origin="0 0 0" Spacing="{voxel_size:.17g} '
+            f'{voxel_size:.17g} {voxel_size:.17g}">\n',
+            f'<Piece Extent="0 {nx} 0 {ny} 0 {nz}">\n',
+            '<CellData Scalars="image">\n',
+        ]
+        for (name, components, data_type, _, _), data_offset in zip(
+            array_specs, offsets
+        ):
+            component_attribute = (
+                f' NumberOfComponents="{components}"' if components > 1 else ""
+            )
+            header.append(
+                f'<DataArray type="{data_type}" Name="{name}"'
+                f'{component_attribute} format="appended" offset="{data_offset}"/>\n'
+            )
+        header.extend([
+            '</CellData>\n',
+            '<PointData/>\n',
+            '</Piece>\n',
+            '</ImageData>\n',
+            '<AppendedData encoding="raw">_',
+        ])
+
+        with output_path.open("wb") as vti_file:
+            vti_file.write("".join(header).encode("ascii"))
+            for staged_payload, compressed_sizes, block_size in staged_arrays:
+                for header_value in (
+                    len(compressed_sizes),
+                    block_size,
+                    block_size,
+                    *compressed_sizes,
+                ):
+                    vti_file.write(header_value.to_bytes(8, byteorder="big"))
+                while compressed_chunk := staged_payload.read(1_048_576):
+                    vti_file.write(compressed_chunk)
+            vti_file.write(b'</AppendedData>\n</VTKFile>\n')
 
     return output_path
 
