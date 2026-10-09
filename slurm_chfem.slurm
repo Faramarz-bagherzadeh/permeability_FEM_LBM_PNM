@@ -16,8 +16,8 @@ module load conda
 module load cuda
 conda activate chfem39
 
-##INPUT_DIR="/albedo/work/projects/p_ICECTai/B51_processed/samples"
-INPUT_DIR="/albedo/work/user/fabagh001/chfem/test_samples"
+INPUT_DIR="/albedo/work/projects/p_ICECTai/B51_processed/samples"
+##INPUT_DIR="/albedo/work/user/fabagh001/chfem/test_samples"
 OUTPUT_DIR="/albedo/work/user/fabagh001/chfem/results"
 
 python -u "chfem_permeability.py" \
