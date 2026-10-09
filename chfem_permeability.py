@@ -292,7 +292,7 @@ def process_permeability_folder(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     rows = []
-    for image in files:
+    for image in files[:4]:
         domain = tifffile.imread(image)
         result = compute_directional_permeability(
             domain, voxel_size=voxel_size, solver=solver,
