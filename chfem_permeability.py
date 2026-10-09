@@ -257,19 +257,21 @@ def process_permeability_folder(
     porosity_threshold: float = 0.02,
     file_offset: int = 0,
     file_limit: int | None = None,
+    vti_output_dir: str | Path | None = None,
     voxel_size: float = 120e-6,
     solver: str = "minres",
     solver_tolerance: float = 1e-6,
     solver_maxiter: int = 2000,
     precondition: bool = False,
 ) -> "pd.DataFrame":
-    """Solve selected segmented TIFFs and save permeability and VTK fields.
+    """Solve selected segmented TIFFs and save permeability and VTI fields.
 
     Each VTK stores the voxel-centred image and assembled directional velocity
     as float32 cell data on the TIFF's physical ``(x, y, z)`` grid.
     When ``metadata_file`` is provided, only images listed in its ``filename``
     column with ``porosity_open`` above ``porosity_threshold`` are solved.
     ``file_offset`` and ``file_limit`` select a batch from the sorted TIFFs.
+    ``vti_output_dir`` optionally places all VTI files in a shared directory.
     """
     folder = Path(image_folder)
     selected_names = None
@@ -307,6 +309,9 @@ def process_permeability_folder(
 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
+    vti_output = (
+        Path(vti_output_dir) if vti_output_dir is not None else output / "vtk_fields"
+    )
     rows = []
     for image in files:
         print(f"Processing {image.name}...")
@@ -315,7 +320,7 @@ def process_permeability_folder(
             domain, voxel_size=voxel_size, solver=solver,
             solver_tolerance=solver_tolerance, solver_maxiter=solver_maxiter,
             precondition=precondition,
-            velocity_output_dir=output / "vtk_fields",
+            velocity_output_dir=vti_output,
             vtk_filename=f"{image.stem}.vti",
         )
         row = {"file": image.name}
@@ -347,6 +352,7 @@ if __name__ == "__main__":
     parser.add_argument("--porosity_threshold", type=float, default=0.02)
     parser.add_argument("--file_offset", type=int, default=0)
     parser.add_argument("--file_limit", type=int)
+    parser.add_argument("--vti_output_dir", type=Path)
     args = parser.parse_args()
     print("Input directory:", args.input_dir)
     print("Output directory:", args.output_dir)
@@ -358,6 +364,7 @@ if __name__ == "__main__":
         porosity_threshold=args.porosity_threshold,
         file_offset=args.file_offset,
         file_limit=args.file_limit,
+        vti_output_dir=args.vti_output_dir,
     )
     t2= time.time()
     print(f"Total time taken: {(t2-t1)/60:.2f} minutes")
