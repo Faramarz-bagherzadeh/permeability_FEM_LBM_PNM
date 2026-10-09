@@ -18,7 +18,7 @@ module load cuda
 conda activate chfem39
 
 INPUT_DIR="${INPUT_DIR:-/albedo/work/projects/p_ICECTai/B51_processed/samples}"
-OUTPUT_DIR="/albedo/work/user/fabagh001/chfem/results"
+OUTPUT_DIR="/albedo/scratch/user/fabagh001/chfem_results"
 SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
 METADATA_FILE="$SCRIPT_DIR/B51.xlsx"
 BATCH_SIZE="${BATCH_SIZE:-50}"
