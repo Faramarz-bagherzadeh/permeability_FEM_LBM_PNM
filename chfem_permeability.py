@@ -248,6 +248,8 @@ def process_permeability_folder(
     *,
     metadata_file: str | Path | None = None,
     porosity_threshold: float = 0.02,
+    file_offset: int = 0,
+    file_limit: int | None = None,
     voxel_size: float = 120e-6,
     solver: str = "minres",
     solver_tolerance: float = 1e-6,
@@ -260,6 +262,7 @@ def process_permeability_folder(
     as float32 cell data on the TIFF's physical ``(x, y, z)`` grid.
     When ``metadata_file`` is provided, only images listed in its ``filename``
     column with ``porosity_open`` above ``porosity_threshold`` are solved.
+    ``file_offset`` and ``file_limit`` select a batch from the sorted TIFFs.
     """
     folder = Path(image_folder)
     selected_names = None
@@ -285,14 +288,21 @@ def process_permeability_folder(
             p
             for p in folder.iterdir()
             if p.is_file() and p.suffix.lower() in (".tif", ".tiff")
-            and (selected_names is None or p.name in selected_names)
         ),
         key=lambda p: p.name,
     )
+    if file_offset < 0 or (file_limit is not None and file_limit < 0):
+        raise ValueError("file_offset and file_limit must be non-negative")
+    stop = None if file_limit is None else file_offset + file_limit
+    files = files[file_offset:stop]
+    if selected_names is not None:
+        files = [image for image in files if image.name in selected_names]
+
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     rows = []
-    for image in files[:4]:
+    for image in files:
+        print(f"Processing {image.name}...")
         domain = tifffile.imread(image)
         result = compute_directional_permeability(
             domain, voxel_size=voxel_size, solver=solver,
@@ -328,6 +338,8 @@ if __name__ == "__main__":
         "--metadata_file", type=Path, default=Path(__file__).with_name("B51.xlsx")
     )
     parser.add_argument("--porosity_threshold", type=float, default=0.02)
+    parser.add_argument("--file_offset", type=int, default=0)
+    parser.add_argument("--file_limit", type=int)
     args = parser.parse_args()
     print("Input directory:", args.input_dir)
     print("Output directory:", args.output_dir)
@@ -337,6 +349,8 @@ if __name__ == "__main__":
         args.output_dir,
         metadata_file=args.metadata_file,
         porosity_threshold=args.porosity_threshold,
+        file_offset=args.file_offset,
+        file_limit=args.file_limit,
     )
     t2= time.time()
     print(f"Total time taken: {(t2-t1)/60:.2f} minutes")
