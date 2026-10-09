@@ -183,6 +183,8 @@ def compute_directional_permeability(
                     velocity_file = Path(f"{prefix}_velocity_{index}.bin")
                     velocity = chfem.import_vector_field_from_chfem(
                         str(velocity_file), domain.shape)
+                    if velocity.shape == (3, *domain.shape):
+                        velocity = np.moveaxis(velocity, 0, -1)
                     if velocity.shape != domain.shape + (3,):
                         raise ValueError(
                             f"CHFEM {direction}-velocity shape {velocity.shape} "
