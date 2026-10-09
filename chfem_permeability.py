@@ -21,13 +21,10 @@ import tifffile
 def _write_float32_binary(
     file_object,
     array: np.ndarray,
-    *,
-    chunk_size: int = 1_048_576,
 ) -> None:
-    """Write an array to a Legacy VTK binary block as big-endian float32."""
-    flat = np.asarray(array).reshape(-1)
-    for start in range(0, flat.size, chunk_size):
-        values = np.asarray(flat[start : start + chunk_size], dtype=">f4")
+    """Write an array as big-endian float32 one z-slice at a time."""
+    for z_slice in array:
+        values = np.asarray(z_slice, dtype=">f4")
         file_object.write(values.tobytes(order="C"))
 
 
@@ -46,48 +43,73 @@ def _write_zero_float32_binary(
         remaining -= count
 
 
-def _write_legacy_vtk(
+def _write_vti(
     path: str | Path,
     domain: np.ndarray,
-    velocity: np.ndarray | None,
+    velocity_fields: np.ndarray | None,
     voxel_size: float,
 ) -> Path:
-    """Write voxel-centred image and velocity data to one binary Legacy VTK."""
+    """Write the image and three directional velocity fields to a binary VTI."""
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     nz, ny, nx = domain.shape
     cell_count = int(nx * ny * nz)
-    if velocity is not None and velocity.shape != domain.shape + (3,):
+    expected_velocity_shape = domain.shape + (3, 3)
+    if velocity_fields is not None and velocity_fields.shape != expected_velocity_shape:
         raise ValueError(
-            f"velocity shape {velocity.shape} does not match domain shape "
-            f"{domain.shape} + (3,)"
+            f"velocity fields shape {velocity_fields.shape} does not match "
+            f"expected shape {expected_velocity_shape}"
         )
 
-    header = (
-        "# vtk DataFile Version 3.0\n"
-        "CHFEM segmented domain and directional velocity\n"
-        "BINARY\n"
-        "DATASET STRUCTURED_POINTS\n"
-        f"DIMENSIONS {nx + 1} {ny + 1} {nz + 1}\n"
-        "ORIGIN 0 0 0\n"
-        f"SPACING {voxel_size:.17g} {voxel_size:.17g} {voxel_size:.17g}\n"
-        f"CELL_DATA {cell_count}\n"
-        "SCALARS image float 1\n"
-        "LOOKUP_TABLE default\n"
+    array_specs = [("image", 1, cell_count)]
+    array_specs.extend(
+        (f"velocity_{direction}", 3, cell_count * 3)
+        for direction in "xyz"
     )
+    offsets = []
+    offset = 0
+    for _, _, value_count in array_specs:
+        offsets.append(offset)
+        offset += 8 + value_count * 4
 
-    with output_path.open("wb") as vtk_file:
-        vtk_file.write(header.encode("ascii"))
-        # C-order flattening of (z, y, x) makes X the fastest-varying VTK axis.
-        _write_float32_binary(vtk_file, domain)
-        vtk_file.write(b"\nVECTORS velocity float\n")
-        if velocity is None:
-            _write_zero_float32_binary(vtk_file, cell_count * 3)
-        else:
-            # The final axis is kept interleaved as (ux, uy, uz) for each cell.
-            _write_float32_binary(vtk_file, velocity)
-        vtk_file.write(b"\n")
+    header = [
+        '<?xml version="1.0"?>\n',
+        '<VTKFile type="ImageData" version="1.0" byte_order="BigEndian" '
+        'header_type="UInt64">\n',
+        f'<ImageData WholeExtent="0 {nx} 0 {ny} 0 {nz}" '
+        f'Origin="0 0 0" Spacing="{voxel_size:.17g} '
+        f'{voxel_size:.17g} {voxel_size:.17g}">\n',
+        f'<Piece Extent="0 {nx} 0 {ny} 0 {nz}">\n',
+        '<CellData Scalars="image">\n',
+    ]
+    for (name, components, _), data_offset in zip(array_specs, offsets):
+        component_attribute = (
+            f' NumberOfComponents="{components}"' if components > 1 else ""
+        )
+        header.append(
+            f'<DataArray type="Float32" Name="{name}"{component_attribute} '
+            f'format="appended" offset="{data_offset}"/>\n'
+        )
+    header.extend([
+        '</CellData>\n',
+        '<PointData/>\n',
+        '</Piece>\n',
+        '</ImageData>\n',
+        '<AppendedData encoding="raw">_',
+    ])
+
+    with output_path.open("wb") as vti_file:
+        vti_file.write("".join(header).encode("ascii"))
+        vti_file.write((cell_count * 4).to_bytes(8, byteorder="big"))
+        _write_float32_binary(vti_file, domain)
+        for index in range(3):
+            vti_file.write((cell_count * 3 * 4).to_bytes(8, byteorder="big"))
+            if velocity_fields is None:
+                _write_zero_float32_binary(vti_file, cell_count * 3)
+            else:
+                _write_float32_binary(vti_file, velocity_fields[..., index, :])
+        vti_file.write(b'</AppendedData>\n</VTKFile>\n')
 
     return output_path
 
@@ -101,7 +123,7 @@ def compute_directional_permeability(
     solver_maxiter: int = 2000,
     precondition: bool = False,
     velocity_output_dir: str | Path | None = None,
-    vtk_filename: str = "fields.vtk",
+    vtk_filename: str = "fields.vti",
 ) -> dict[str, float] | dict[str, dict[str, float] | str]:
     """Compute CHFEM permeability independently in the X, Y, and Z directions.
 
@@ -115,10 +137,10 @@ def compute_directional_permeability(
     solver, solver_tolerance, solver_maxiter, precondition
         Parameters forwarded directly to CHFEM.
     velocity_output_dir
-        Optional directory for one Legacy VTK file containing the image and
-        assembled directional velocity vector.
+        Optional directory for one VTI file containing the image and all three
+        directional velocity vector fields.
     vtk_filename
-        Name of the Legacy VTK file written inside ``velocity_output_dir``.
+        Name of the VTI file written inside ``velocity_output_dir``.
 
     Returns
     -------
@@ -146,7 +168,7 @@ def compute_directional_permeability(
         permeability = {direction: 0.0 for direction in directions}
         if field_dir is None:
             return permeability
-        _write_legacy_vtk(vtk_path, domain, None, float(voxel_size))
+        _write_vti(vtk_path, domain, None, float(voxel_size))
         return {"permeability": permeability, "vtk_path": str(vtk_path)}
 
     permeability: dict[str, float] = {}
@@ -157,7 +179,7 @@ def compute_directional_permeability(
                 Path(vtk_work_dir) / "velocity.float32",
                 mode="w+",
                 dtype=np.float32,
-                shape=domain.shape + (3,),
+                shape=domain.shape + (3, 3),
             )
             assembled_velocity[:] = 0
 
@@ -176,9 +198,7 @@ def compute_directional_permeability(
                 )
 
                 if assembled_velocity is not None:
-                    # CHFEM's importer returns (z, y, x, [ux, uy, uz]). Keep
-                    # the component parallel to each directional solve so the
-                    # single VTK vector is (ux_from_x, uy_from_y, uz_from_z).
+                    # Preserve the full vector field for each directional solve.
                     index = directions.index(direction)
                     velocity_file = Path(f"{prefix}_velocity_{index}.bin")
                     velocity = chfem.import_vector_field_from_chfem(
@@ -192,8 +212,8 @@ def compute_directional_permeability(
                             f"match {domain.shape + (3,)}"
                         )
                     np.copyto(
-                        assembled_velocity[..., index],
-                        velocity[..., index],
+                        assembled_velocity[..., index, :],
+                        velocity,
                         casting="unsafe",
                     )
                     del velocity
@@ -212,7 +232,7 @@ def compute_directional_permeability(
 
         if assembled_velocity is not None:
             assembled_velocity.flush()
-            _write_legacy_vtk(
+            _write_vti(
                 vtk_path, domain, assembled_velocity, float(voxel_size)
             )
             del assembled_velocity
@@ -279,7 +299,7 @@ def process_permeability_folder(
             solver_tolerance=solver_tolerance, solver_maxiter=solver_maxiter,
             precondition=precondition,
             velocity_output_dir=output / "vtk_fields",
-            vtk_filename=f"{image.stem}.vtk",
+            vtk_filename=f"{image.stem}.vti",
         )
         row = {"file": image.name}
         for direction in "xyz":
