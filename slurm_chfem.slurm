@@ -10,6 +10,9 @@
 #SBATCH --job-name=Permeability
 #SBATCH --output=/albedo/work/user/fabagh001/chfem/logs/log_%A_%a.out
 
+## run commands for sample 4 files: bash submit_chfem_array.sh
+## run commands for all sample files: MAX_FILES=0 bash submit_chfem_array.sh
+
 set -euo pipefail
 
 module load mesa
