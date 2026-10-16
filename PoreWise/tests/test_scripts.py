@@ -55,9 +55,9 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
     def load(path):
         if references:
             assert references[-1]() is None
-            previous = output / Path(names[len(references) - 1]).stem
-            assert (previous / 'fields.vti').is_file()
-            assert (previous / 'permeability.json').is_file()
+            previous_stem = Path(names[len(references) - 1]).stem
+            assert (output / f'{previous_stem}.vti').is_file()
+            assert (output / f'{previous_stem}.json').is_file()
             assert (output / 'permeability_results.xlsx').is_file()
         image = load_image(path)
         references.append(weakref.ref(image))
@@ -75,11 +75,13 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
         '--output_dir', str(output), '--metadata_file', str(metadata_file),
     ])
     assert len(references) == 3 and all(reference() is None for reference in references)
+    expected_names = {'permeability_results.xlsx'}
     for name in names:
-        folder = output / Path(name).stem
-        assert {p.name for p in folder.iterdir()} == {'permeability.json', 'fields.vti'}
-        assert set(json.loads((folder / 'permeability.json').read_text())) == {
+        stem = Path(name).stem
+        expected_names.update({f'{stem}.json', f'{stem}.vti'})
+        assert set(json.loads((output / f'{stem}.json').read_text())) == {
             'k_x_m2', 'k_y_m2', 'k_z_m2'}
+    assert {path.name for path in output.iterdir()} == expected_names
     assert not list(tmp_path.rglob('*.npy'))
 
 

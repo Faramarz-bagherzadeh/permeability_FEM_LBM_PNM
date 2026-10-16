@@ -79,12 +79,13 @@ def main(argv=()):
         image = load_image(image_path)
         solid = decode_mask(image, solid_value=SOLID_VALUE, pore_value=PORE_VALUE)
 
-        folder = args.output_dir / image_path.stem
         result = save_directional_results(
-            folder,
+            args.output_dir,
             solid,
             voxel_size=VOXEL_SIZE_M,
             microct=image,
+            vti_filename=f"{image_path.stem}.vti",
+            json_filename=f"{image_path.stem}.json",
             backend="cuda-sparse",
             collision="trt",
             tau=TAU,
@@ -96,7 +97,7 @@ def main(argv=()):
         )
         for axis in "xyz":
             print(f"k_{axis} = {result[f'k_{axis}_m2']:.6e} m²")
-        print(f"Saved: {folder}", flush=True)
+        print(f"Saved: {args.output_dir / image_path.stem}", flush=True)
 
         if SAVE_EXCEL:
             rows.append((image_path, result))

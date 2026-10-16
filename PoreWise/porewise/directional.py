@@ -41,7 +41,17 @@ def compute_directional_permeability(blocked, voxel_size, **settings):
     return result
 
 
-def save_directional_results(directory, blocked, voxel_size, *, microct=None, mirror=False, **settings):
+def save_directional_results(
+    directory,
+    blocked,
+    voxel_size,
+    *,
+    microct=None,
+    mirror=False,
+    vti_filename='fields.vti',
+    json_filename='permeability.json',
+    **settings,
+):
     """Write permeability.json and a single Float32 fields.vti with image + three loads.
 
     microct preserves the original input image labels. If omitted, the Boolean
@@ -57,6 +67,10 @@ def save_directional_results(directory, blocked, voxel_size, *, microct=None, mi
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     loads = directional_runs(blocked, voxel_size, **settings)
-    permeabilities = write_directional_vti(directory / 'fields.vti', image, loads, voxel_size)
-    (directory / 'permeability.json').write_text(json.dumps(permeabilities, indent=2) + '\n')
+    permeabilities = write_directional_vti(
+        directory / vti_filename, image, loads, voxel_size
+    )
+    (directory / json_filename).write_text(
+        json.dumps(permeabilities, indent=2) + '\n'
+    )
     return permeabilities
