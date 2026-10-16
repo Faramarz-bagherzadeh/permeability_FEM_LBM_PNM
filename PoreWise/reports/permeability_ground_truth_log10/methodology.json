@@ -1,0 +1,19 @@
+{
+  "ground_truth_file": "/home/drill/Projects/FB/Codes/PoreWise/PoreWise/porewise/results/ground_truth.xlsx",
+  "ground_truth_sha256": "59d53b64a83d1eb99fede02e0530970b12085fdaebaf1cd5079546355331ec79",
+  "sheet": "Sheet1",
+  "ground_truth_rows": 287,
+  "matched_samples": 23,
+  "uncomputed_reference_samples": 264,
+  "complete_tensor_samples": 21,
+  "log_transform": "log10 of the numerical permeability in m^2, equivalently log10(k / 1 m^2)",
+  "direction_mapping": "X=K_m2[0][0], Y=K_m2[1][1], Z=K_m2[2][2]; components xyz",
+  "matching": "Exact filename stem, removing the .tif extension",
+  "r2": "1 - sum((prediction_log10 - truth_log10)^2) / sum((truth_log10 - mean(truth_log10))^2); no regression fitted",
+  "mae": "mean(abs(prediction_log10 - truth_log10))",
+  "rmse": "sqrt(mean((prediction_log10 - truth_log10)^2))",
+  "error_units": "dex (base-10 log units), not m^2; R2 is dimensionless",
+  "complete_tensors": "Common samples with accepted full tensors and three positive finite reference/prediction pairs",
+  "valid_directions": "Each direction separately; accepted finite positive directional results, including valid columns from incomplete tensors",
+  "exclusions": "Invalid solves and nonpositive/nonfinite pairs are excluded; no arbitrary outlier removal or missing-value imputation"
+}

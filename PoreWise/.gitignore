@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Data / outputs (don't commit large binaries or results)
+*.npy
+*.raw
+*.vti
+*.bin
+*.png
+*.pdf
+!docs/**/*.png
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local evidence, large outputs and archives
+/results/
+/results
+*.npz
+*.tar.gz
+*.whl
+.cupy/
+.cache/
+.env
+.env.*
+*.pem
+*.key
+
+# Tiny deterministic reproduction fixture, not a downloaded rock volume.
+!benchmarks/configs/open_channel.npy
+
+# Local B51 input data, simulation logs and results
+/porewise/data/npy/
+/porewise/data/tif/
+/porewise/logs/
+/porewise/results/

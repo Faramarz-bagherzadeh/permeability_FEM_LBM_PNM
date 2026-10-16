@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "porewise"
+version = "0.1.0"
+description = "Permeability tensors of 2D and 3D pore images with the lattice Boltzmann method, on GPU or CPU"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Saleh Mohammadrezaei", email = "salehmrezaee@gmail.com" }]
+requires-python = ">=3.8"
+dependencies = ["numpy>=1.21", "tifffile>=2021.11.2"]
+keywords = ["lattice-boltzmann", "permeability", "porous-media", "CFD", "GPU", "digital-rock"]
+
+[project.urls]
+Homepage = "https://github.com/SalehMohammadrezaei/PoreWise"
+Issues = "https://github.com/SalehMohammadrezaei/PoreWise/issues"
+
+[project.optional-dependencies]
+gpu = ["cupy-cuda12x>=12"]
+cpu = ["numba>=0.59"]
+excel = ["openpyxl>=3.1"]
+test = ["pytest>=7"]
+morphology = ["scipy>=1.10"]
+viz = ["matplotlib>=3.5", "pyvista>=0.44"]
+
+[tool.setuptools]
+packages = ["porewise", "lbm_permeability"]

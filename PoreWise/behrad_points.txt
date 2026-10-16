@@ -1,0 +1,15 @@
+# Run from the repository root with the virtual environment active.
+# Install the CuPy distribution matching your CUDA environment.
+python -m pip install . cupy-cuda13x
+
+# Put complete 3D TIFF volumes in porewise/data/tif/.
+# Edit labels, voxel size, input pattern and steps in run_gpu.py.
+# Each volume is loaded into memory, processed in x/y/z, exported, and released.
+# No conversion script or intermediate .npy files are needed.
+python -u run_gpu.py
+
+# Optional: run inside tmux to survive a terminal disconnect.
+# See run_gpu.py and README2.md for session commands.
+
+# Retry missing/incomplete directional exports (fixed steps; no quality gate).
+./rerun_failed_bags.sh
