@@ -9,12 +9,20 @@ import pytest
 import run_gpu
 
 
-def test_gpu_script_empty_selection_creates_no_outputs(tmp_path, monkeypatch):
-    monkeypatch.setattr(run_gpu, 'INPUT_FOLDER', tmp_path)
-    monkeypatch.setattr(run_gpu, 'INPUT_PATTERN', '*.npy')
-    monkeypatch.setattr(run_gpu, 'OUTPUT_FOLDER', tmp_path / 'results')
-    run_gpu.main()
-    assert not run_gpu.OUTPUT_FOLDER.exists()
+def test_gpu_script_empty_selection_creates_no_outputs(tmp_path):
+    from openpyxl import Workbook
+
+    metadata_file = tmp_path / 'B51.xlsx'
+    workbook = Workbook()
+    workbook.active.append(['filename', 'porosity_open'])
+    workbook.save(metadata_file)
+    workbook.close()
+    output = tmp_path / 'results'
+    run_gpu.main([
+        '--input_dir', str(tmp_path), '--input_pattern', '*.npy',
+        '--output_dir', str(output), '--metadata_file', str(metadata_file),
+    ])
+    assert not output.exists()
 
 
 def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, monkeypatch):
@@ -32,9 +40,15 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
     (source / 'notes.txt').write_text('Ignore non-image files')
     (source / 'directory.tif').mkdir()
     output = tmp_path / 'results'
-    monkeypatch.setattr(run_gpu, 'INPUT_FOLDER', source)
-    monkeypatch.setattr(run_gpu, 'INPUT_PATTERN', '*')
-    monkeypatch.setattr(run_gpu, 'OUTPUT_FOLDER', output)
+    from openpyxl import Workbook
+    metadata_file = tmp_path / 'B51.xlsx'
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(['filename', 'porosity_open'])
+    for name in names:
+        sheet.append([name, 0.5])
+    workbook.save(metadata_file)
+    workbook.close()
     monkeypatch.setattr(run_gpu, 'SAVE_EXCEL', True)
     references = []
 
@@ -56,7 +70,10 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
     pytest.importorskip('openpyxl')
     monkeypatch.setattr(run_gpu, 'load_image', load)
     monkeypatch.setattr(run_gpu, 'save_directional_results', save)
-    run_gpu.main()
+    run_gpu.main([
+        '--input_dir', str(source), '--input_pattern', '*',
+        '--output_dir', str(output), '--metadata_file', str(metadata_file),
+    ])
     assert len(references) == 3 and all(reference() is None for reference in references)
     for name in names:
         folder = output / Path(name).stem
@@ -64,6 +81,40 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
         assert set(json.loads((folder / 'permeability.json').read_text())) == {
             'k_x_m2', 'k_y_m2', 'k_z_m2'}
     assert not list(tmp_path.rglob('*.npy'))
+
+
+def test_gpu_script_filters_metadata_after_selecting_file_batch(tmp_path, monkeypatch):
+    from openpyxl import Workbook
+
+    source = tmp_path / 'samples'
+    source.mkdir()
+    for name in ('a.tif', 'b.tif', 'c.tif', 'd.tif'):
+        (source / name).touch()
+    metadata_file = tmp_path / 'B51.xlsx'
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(['filename', 'porosity_open'])
+    sheet.append(['a.tif', 0.5])
+    sheet.append(['b.tif', 0.0201])
+    sheet.append(['c.tif', 0.02])
+    sheet.append(['d.tif', 0.0])
+    workbook.save(metadata_file)
+    workbook.close()
+    loaded = []
+
+    monkeypatch.setattr(run_gpu, 'load_image', lambda path: loaded.append(path.name) or np.zeros((1, 1, 1)))
+    monkeypatch.setattr(run_gpu, 'save_directional_results', lambda *args, **kwargs: {
+        'k_x_m2': 1.0, 'k_y_m2': 1.0, 'k_z_m2': 1.0})
+    monkeypatch.setattr(run_gpu, 'SAVE_EXCEL', False)
+
+    run_gpu.main([
+        '--input_dir', str(source), '--input_pattern', '*',
+        '--output_dir', str(tmp_path / 'results'),
+        '--metadata_file', str(metadata_file), '--porosity_threshold', '0.02',
+        '--file_offset', '1', '--file_limit', '2',
+    ])
+
+    assert loaded == ['b.tif']
 
 
 def test_2d_example_reads_tiff_without_input_copy(tmp_path):
