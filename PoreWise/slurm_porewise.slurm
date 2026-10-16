@@ -13,11 +13,16 @@
 set -euo pipefail
 
 module load mesa
-module load conda
 module load cuda/12.2.2
-conda activate "${CONDA_ENV:-lbm_env}"
 
 SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+VENV_ACTIVATE="$SCRIPT_DIR/.venv/bin/activate"
+if [[ ! -f "$VENV_ACTIVATE" ]]; then
+    echo "PoreWise virtual environment not found: $VENV_ACTIVATE" >&2
+    exit 1
+fi
+source "$VENV_ACTIVATE"
+
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 INPUT_DIR="${INPUT_DIR:-/albedo/work/projects/p_ICECTai/B51_processed/samples}"
 OUTPUT_DIR="${OUTPUT_DIR:-/albedo/scratch/user/fabagh001/lbm}"
