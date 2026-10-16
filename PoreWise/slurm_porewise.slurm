@@ -9,7 +9,7 @@
 #SBATCH --time=47:00:00
 #SBATCH --job-name=PoreWise
 #SBATCH --output=logs/porewise_%A_%a.out
-
+## how to run the code  MAX_FILES=4 bash submit_porewise_array.sh
 set -euo pipefail
 
 module load mesa
@@ -17,7 +17,7 @@ module load conda
 module load cuda
 conda activate "${CONDA_ENV:-lbm_env}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 INPUT_DIR="${INPUT_DIR:-/albedo/work/projects/p_ICECTai/B51_processed/samples}"
 OUTPUT_DIR="${OUTPUT_DIR:-/albedo/scratch/user/fabagh001/lbm}"
