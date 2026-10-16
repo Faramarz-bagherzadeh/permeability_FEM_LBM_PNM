@@ -14,7 +14,7 @@ set -euo pipefail
 
 module load mesa
 module load conda
-module load cuda
+module load cuda/12.2.2
 conda activate "${CONDA_ENV:-lbm_env}"
 
 SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -39,6 +39,13 @@ if (( FILE_LIMIT <= 0 )); then
     echo "Array task $TASK_ID is beyond the requested file limit; skipping."
     exit 0
 fi
+
+python - <<'PY'
+import cupy as cp
+
+print(f"CuPy {cp.__version__}: {cp.__file__}", flush=True)
+print("CUDA kernel preflight:", (cp.arange(4) ** 2).get(), flush=True)
+PY
 
 python -u "$SCRIPT_DIR/run_gpu.py" \
     --input_dir "$INPUT_DIR" \
