@@ -14,6 +14,12 @@ set -euo pipefail
 
 module load mesa
 module load cuda/12.2.2
+CUDA_LIB_DIR="$CUDA_HOME/targets/x86_64-linux/lib"
+if [[ ! -f "$CUDA_LIB_DIR/libnvrtc-builtins.so.12.2" ]]; then
+    echo "NVRTC built-ins library not found: $CUDA_LIB_DIR/libnvrtc-builtins.so.12.2" >&2
+    exit 1
+fi
+export LD_LIBRARY_PATH="$CUDA_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 SCRIPT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 VENV_ACTIVATE="$SCRIPT_DIR/.venv/bin/activate"
