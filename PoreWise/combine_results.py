@@ -4,7 +4,7 @@ import argparse
 import pandas as pd
 
 # run with the results directory as an argument, or run in the results directory to combine all task_*/permeability_results.xlsx files
-# python combine__results.py /albedo/scratch/user/fabagh001/lbm
+# python combine_results.py /albedo/scratch/user/fabagh001/lbm
 SCRIPT_DIR = Path(__file__).resolve().parent
 OUTPUT_FILE = SCRIPT_DIR / "porewise_permeability_results_complete.xlsx"
 
