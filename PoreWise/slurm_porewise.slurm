@@ -9,7 +9,7 @@
 #SBATCH --time=47:00:00
 #SBATCH --job-name=PoreWise
 #SBATCH --output=logs/porewise_%A_%a.out
-## how to run the code  MAX_FILES=4 bash submit_porewise_array.sh
+## how to run the code  for all MAX_FILES=0 BATCH_SIZE=10 bash submit_porewise_array.sh
 set -euo pipefail
 
 module load mesa
