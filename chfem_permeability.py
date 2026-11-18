@@ -330,7 +330,7 @@ def process_permeability_folder(
     voxel_size: float = 120e-6,
     solver: str = "minres",
     solver_tolerance: float = 1e-6,
-    solver_maxiter: int = 2000,
+    solver_maxiter: int = 20000,
     precondition: bool = False,
 ) -> "pd.DataFrame":
     """Solve selected segmented TIFFs and save permeability and VTI fields.
