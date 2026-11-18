@@ -329,7 +329,7 @@ def process_permeability_folder(
     vti_output_dir: str | Path | None = None,
     voxel_size: float = 120e-6,
     solver: str = "minres",
-    solver_tolerance: float = 1e-6,
+    solver_tolerance: float = 1e-5,
     solver_maxiter: int = 20000,
     precondition: bool = False,
 ) -> "pd.DataFrame":
