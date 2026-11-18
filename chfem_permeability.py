@@ -129,7 +129,7 @@ def compute_directional_permeability(
     voxel_size: float = 120e-6,
     solver: str = "minres",
     solver_tolerance: float = 1e-6,
-    solver_maxiter: int = 2000,
+    solver_maxiter: int = 10000,
     precondition: bool = False,
     velocity_output_dir: str | Path | None = None,
     vtk_filename: str = "fields.vti",
