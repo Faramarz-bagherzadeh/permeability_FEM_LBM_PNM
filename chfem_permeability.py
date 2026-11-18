@@ -18,6 +18,8 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import tifffile
 
+from isolated_voids import fill_isolated_voids
+
 
 
 def _write_vti(
@@ -158,12 +160,14 @@ def compute_directional_permeability(
 
     Notes
     -----
-    This function expects a solver-ready volume. It does not downsample the
-    image or fill disconnected pores.
+    Isolated void components are filled in the solver input. The original
+    binary image is retained in the VTI output.
     """
     import chfem
 
-    domain = np.asarray(binary)
+    main_domain = np.asarray(binary)
+    domain = fill_isolated_voids(main_domain)
+    main_domain = np.ascontiguousarray(main_domain, dtype=np.uint8)
     directions = ("x", "y", "z")
 
     domain = np.ascontiguousarray(domain, dtype=np.uint8)
@@ -175,7 +179,7 @@ def compute_directional_permeability(
         permeability = {direction: 0.0 for direction in directions}
         if field_dir is None:
             return permeability
-        _write_vti(vtk_path, domain, None, float(voxel_size))
+        _write_vti(vtk_path, main_domain, None, float(voxel_size))
         return {"permeability": permeability, "vtk_path": str(vtk_path)}
 
     permeability: dict[str, float] = {}
@@ -240,7 +244,7 @@ def compute_directional_permeability(
         if assembled_velocity is not None:
             assembled_velocity.flush()
             _write_vti(
-                vtk_path, domain, assembled_velocity, float(voxel_size)
+                vtk_path, main_domain, assembled_velocity, float(voxel_size)
             )
             del assembled_velocity
 
@@ -266,7 +270,8 @@ def process_permeability_folder(
 ) -> "pd.DataFrame":
     """Solve selected segmented TIFFs and save permeability and VTI fields.
 
-    Each VTK stores the voxel-centred image and assembled directional velocity
+    Isolated void components are filled before permeability solves. Each VTK
+    stores the original voxel-centred image and assembled directional velocity
     as float32 cell data on the TIFF's physical ``(x, y, z)`` grid.
     When ``metadata_file`` is provided, only images listed in its ``filename``
     column with ``porosity_open`` above ``porosity_threshold`` are solved.
