@@ -79,8 +79,10 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
     for name in names:
         stem = Path(name).stem
         expected_names.update({f'{stem}.json', f'{stem}.vti'})
-        assert set(json.loads((output / f'{stem}.json').read_text())) == {
-            'k_x_m2', 'k_y_m2', 'k_z_m2'}
+        result = json.loads((output / f'{stem}.json').read_text())
+        assert set(result) >= {'k_x_m2', 'k_y_m2', 'k_z_m2'}
+        for axis in 'xyz':
+            assert f'converged_{axis}' in result
     assert {path.name for path in output.iterdir()} == expected_names
     assert not list(tmp_path.rglob('*.npy'))
 

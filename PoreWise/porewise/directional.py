@@ -20,13 +20,23 @@ def directional_runs(blocked, voxel_size, *, force_magnitude=1e-6, mirror=False,
     dx = spacing(voxel_size)
     if mirror:
         blocked = mirrored(blocked)
-    settings.update(quality_checks=False, return_fields=True, wall_timeout_s=None)
+    settings.setdefault('quality_checks', False)
+    settings.setdefault('return_fields', True)
+    settings.setdefault('wall_timeout_s', None)
     for j, axis in enumerate('xyz'):
         force = np.zeros(3)
         force[j] = force_magnitude
         run = periodic(blocked, force, **settings)
-        permeability = np.float32(run['k_lu'] * dx**2)
+        k_lu = run.get('k_lu')
+        if k_lu is None:
+            k_lu = run.get('k_lu_diagnostic_estimate')
+        permeability = np.float32(k_lu * dx**2) if k_lu is not None else None
         field = {name: np.asarray(run[name], dtype=np.float32) for name in ('ux', 'uy', 'uz')}
+        field['_converged'] = run.get('converged')
+        field['_termination_reason'] = str(
+            run.get('termination_reason', 'not_evaluated')
+        )
+        field['_iterations_completed'] = int(run.get('iterations_completed', 0))
         del run
         yield axis, permeability, field
         del field

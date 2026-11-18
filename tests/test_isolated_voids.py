@@ -11,6 +11,18 @@ from isolated_voids import fill_isolated_voids
 
 
 class FillIsolatedVoidsTests(unittest.TestCase):
+    def test_parses_chfem_solver_status(self):
+        converged = b"iteration: 42, residual: 1.2e-07\n"
+        self.assertEqual(
+            chfem_permeability._parse_solver_status(converged, 1e-6, 10000),
+            (True, 42, 1.2e-07),
+        )
+        exhausted = b"iteration: 10000, residual: 2.0e-05\n"
+        self.assertEqual(
+            chfem_permeability._parse_solver_status(exhausted, 1e-6, 10000),
+            (False, 10000, 2.0e-05),
+        )
+
     def test_fills_enclosed_void_but_preserves_boundary_connected_void(self):
         image = np.ones((5, 5, 5), dtype=np.uint8)
         image[2, 2, 2] = 0

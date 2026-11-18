@@ -88,7 +88,12 @@ def write_directional_vti(path, microct, loads, voxel_size):
         for slab in microct:
             stream.write(np.asarray(slab, dtype='<f4').tobytes(order='C'))
         for axis, permeability, fields in loads:
-            permeabilities[f'k_{axis}_m2'] = float(np.float32(permeability))
+            permeabilities[f'k_{axis}_m2'] = (
+                float(np.float32(permeability)) if permeability is not None else None
+            )
+            permeabilities[f'converged_{axis}'] = fields['_converged']
+            permeabilities[f'termination_{axis}'] = fields['_termination_reason']
+            permeabilities[f'iterations_{axis}'] = fields['_iterations_completed']
             stream.write(struct.pack('<Q', count * 3 * 4))
             for z in range(nz):
                 vector = np.stack([fields['u' + c][z] for c in 'xyz'], axis=-1)

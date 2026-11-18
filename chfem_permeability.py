@@ -8,7 +8,10 @@ using ``direction="all"``.
 from __future__ import annotations
 
 from contextlib import ExitStack
+import os
 from pathlib import Path
+import re
+import sys
 from tempfile import TemporaryDirectory, TemporaryFile
 import zlib
 
@@ -19,6 +22,44 @@ import pandas as pd
 import tifffile
 
 from isolated_voids import fill_isolated_voids
+
+
+def _call_chfem_and_capture(call):
+    """Call CHFEM while capturing native C/CUDA stdout for solver metrics."""
+    with TemporaryFile(mode="w+b") as stream:
+        saved_stdout = os.dup(1)
+        try:
+            sys.stdout.flush()
+            os.dup2(stream.fileno(), 1)
+            result = call()
+            sys.stdout.flush()
+        finally:
+            os.dup2(saved_stdout, 1)
+            os.close(saved_stdout)
+        stream.seek(0)
+        output = stream.read()
+    return result, output
+
+
+def _parse_solver_status(output, tolerance, max_iterations):
+    text = output.decode("utf-8", errors="replace")
+    matches = re.findall(
+        r"iteration:\s*(\d+),\s*residual:\s*([0-9.eE+\-]+)",
+        text,
+    )
+    if not matches:
+        if "satisfied MINRES" in text:
+            return True, 0, 0.0
+        return None, None, None
+
+    iterations, residual_text = matches[-1]
+    iterations = int(iterations)
+    residual = float(residual_text)
+    if residual <= tolerance:
+        return True, iterations, residual
+    if iterations >= max_iterations:
+        return False, iterations, residual
+    return False, iterations, residual
 
 
 
@@ -180,9 +221,18 @@ def compute_directional_permeability(
         if field_dir is None:
             return permeability
         _write_vti(vtk_path, main_domain, None, float(voxel_size))
-        return {"permeability": permeability, "vtk_path": str(vtk_path)}
+        return {
+            "permeability": permeability,
+            "vtk_path": str(vtk_path),
+            "convergence": {direction: True for direction in directions},
+            "iterations": {direction: 0 for direction in directions},
+            "residual": {direction: 0.0 for direction in directions},
+        }
 
     permeability: dict[str, float] = {}
+    convergence: dict[str, bool | None] = {}
+    iterations: dict[str, int | None] = {}
+    residual: dict[str, float | None] = {}
     with TemporaryDirectory(prefix="chfem_vtk_") as vtk_work_dir:
         assembled_velocity = None
         if field_dir is not None:
@@ -201,12 +251,21 @@ def compute_directional_permeability(
                     if field_dir is not None
                     else None
                 )
-                raw = chfem.compute_property(
-                    "permeability", domain, voxel_size=float(voxel_size),
-                    solver=solver, solver_tolerance=float(solver_tolerance),
-                    solver_maxiter=int(solver_maxiter), precondition=bool(precondition),
-                    direction=direction, output_fields=prefix,
+                raw, native_output = _call_chfem_and_capture(
+                    lambda: chfem.compute_property(
+                        "permeability", domain, voxel_size=float(voxel_size),
+                        solver=solver, solver_tolerance=float(solver_tolerance),
+                        solver_maxiter=int(solver_maxiter),
+                        precondition=bool(precondition),
+                        direction=direction, output_fields=prefix,
+                    )
                 )
+                converged, completed, final_residual = _parse_solver_status(
+                    native_output, float(solver_tolerance), int(solver_maxiter)
+                )
+                convergence[direction] = converged
+                iterations[direction] = completed
+                residual[direction] = final_residual
 
                 if assembled_velocity is not None:
                     # Preserve the full vector field for each directional solve.
@@ -249,7 +308,13 @@ def compute_directional_permeability(
             del assembled_velocity
 
     if field_dir is not None:
-        return {"permeability": permeability, "vtk_path": str(vtk_path)}
+        return {
+            "permeability": permeability,
+            "vtk_path": str(vtk_path),
+            "convergence": convergence,
+            "iterations": iterations,
+            "residual": residual,
+        }
     return permeability
 
 
@@ -331,6 +396,23 @@ def process_permeability_folder(
         row = {"file": image.name}
         for direction in "xyz":
             row[f"permeability_{direction}_m2"] = result["permeability"][direction]
+            row[f"status_{direction}"] = (
+                "Converged"
+                if result["convergence"][direction] is True
+                else "Not converged"
+                if result["convergence"][direction] is False
+                else "Not evaluated"
+            )
+            row[f"iterations_{direction}"] = result["iterations"][direction]
+            row[f"residual_{direction}"] = result["residual"][direction]
+        statuses = [result["convergence"][direction] for direction in "xyz"]
+        row["overall_status"] = (
+            "Converged"
+            if all(status is True for status in statuses)
+            else "Not converged"
+            if any(status is False for status in statuses)
+            else "Not evaluated"
+        )
         row["vtk_path"] = result["vtk_path"]
         rows.append(row)
         del domain

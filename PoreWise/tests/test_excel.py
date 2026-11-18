@@ -23,11 +23,13 @@ def test_script_export_preserves_names_paths_and_numbers(tmp_path):
     save_permeability_excel(path, [('first/rock.npy', result), ('second/rock.npy', result),
                                    ('=image.npy', result)])
     rows = read_rows(path)
-    assert rows[0] == ('Image filename', 'Image path', 'kx (m²)', 'ky (m²)', 'kz (m²)')
-    assert rows[1][:2] == ('rock.npy', 'first/rock.npy')
-    assert rows[2][:2] == ('rock.npy', 'second/rock.npy')
+    assert rows[0][:5] == ('Image filename', 'Image path', 'kx (m²)', 'ky (m²)', 'kz (m²)')
+    assert rows[1][0] == 'rock.npy'
+    assert rows[1][1].replace('\\', '/') == 'first/rock.npy'
+    assert rows[2][0] == 'rock.npy'
+    assert rows[2][1].replace('\\', '/') == 'second/rock.npy'
     assert rows[3][0] == '=image.npy'
-    assert rows[1][2:] == pytest.approx([float(result[f'k_{axis}_m2']) for axis in 'xyz'])
+    assert rows[1][2:5] == pytest.approx([float(result[f'k_{axis}_m2']) for axis in 'xyz'])
     save_permeability_excel(path, [('replacement.npy', result)])
     assert len(read_rows(path)) == 2
 
@@ -47,7 +49,9 @@ def test_cli_batch_excel_matches_per_image_json(tmp_path):
     for index, image in enumerate(images, start=1):
         result = json.loads((out / f'{index:03d}_{image.stem}' / 'permeability.json').read_text())
         assert rows[index][:2] == (image.name, str(image))
-        assert rows[index][2:] == pytest.approx([result[f'k_{axis}_m2'] for axis in 'xyz'])
+        assert rows[index][2:5] == pytest.approx([result[f'k_{axis}_m2'] for axis in 'xyz'])
+        assert rows[index][5:8] == ('Not evaluated', 'Not evaluated', 'Not evaluated')
+        assert rows[index][8] == 'Not evaluated'
 
 
 def test_cli_excel_keeps_completed_rows_on_later_failure(tmp_path):
@@ -58,4 +62,5 @@ def test_cli_excel_keeps_completed_rows_on_later_failure(tmp_path):
         main([str(image), str(tmp_path / 'missing.npy'), '--backend', 'numpy',
               '--dx', '1e-6', '--steps', '1', '--output', str(tmp_path / 'out'),
               '--excel', str(summary)])
-    assert read_rows(summary)[1] == (image.name, str(image), 0, 0, 0)
+    row = read_rows(summary)[1]
+    assert row[:5] == (image.name, str(image), 0, 0, 0)
