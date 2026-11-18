@@ -5,6 +5,7 @@ import sys
 
 from porewise import decode_mask, load_image, save_permeability_excel
 from porewise.directional import save_directional_results
+from isolated_voids import fill_isolated_voids
 
 
 # Replace these example values with the values for your images.
@@ -78,6 +79,7 @@ def main(argv=()):
         print(f"[{index}/{len(files)}] {image_path.name}", flush=True)
         image = load_image(image_path)
         solid = decode_mask(image, solid_value=SOLID_VALUE, pore_value=PORE_VALUE)
+        solid = fill_isolated_voids(solid)
 
         result = save_directional_results(
             args.output_dir,

@@ -85,6 +85,48 @@ def test_gpu_script_processes_tiffs_sequentially_without_input_copies(tmp_path, 
     assert not list(tmp_path.rglob('*.npy'))
 
 
+def test_gpu_script_fills_isolated_pores_but_preserves_microct(tmp_path, monkeypatch):
+    from openpyxl import Workbook
+
+    source = tmp_path / 'samples'
+    source.mkdir()
+    image = np.ones((5, 5, 5), dtype=np.uint8)
+    image[2, 2, 2] = 0
+    image[0, 0, 0] = 0
+    image[1, 0, 0] = 0
+    import tifffile
+    tifffile.imwrite(source / 'sample.tif', image, photometric='minisblack')
+
+    metadata_file = tmp_path / 'B51.xlsx'
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(['filename', 'porosity_open'])
+    sheet.append(['sample.tif', 0.5])
+    workbook.save(metadata_file)
+    workbook.close()
+
+    captured = {}
+
+    def save(folder, solid, **settings):
+        captured['solid'] = solid.copy()
+        captured['microct'] = settings['microct'].copy()
+        return {'k_x_m2': 1.0, 'k_y_m2': 1.0, 'k_z_m2': 1.0}
+
+    monkeypatch.setattr(run_gpu, 'save_directional_results', save)
+    monkeypatch.setattr(run_gpu, 'SAVE_EXCEL', False)
+
+    run_gpu.main([
+        '--input_dir', str(source), '--input_pattern', '*.tif',
+        '--output_dir', str(tmp_path / 'results'),
+        '--metadata_file', str(metadata_file),
+    ])
+
+    assert captured['solid'][2, 2, 2] == 1
+    assert captured['solid'][0, 0, 0] == 0
+    assert captured['solid'][1, 0, 0] == 0
+    np.testing.assert_array_equal(captured['microct'], image)
+
+
 def test_gpu_script_filters_metadata_after_selecting_file_batch(tmp_path, monkeypatch):
     from openpyxl import Workbook
 
