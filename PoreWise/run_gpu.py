@@ -104,7 +104,23 @@ def main(argv=()):
             heartbeat=1000,
         )
         for axis in "xyz":
-            print(f"k_{axis} = {result[f'k_{axis}_m2']:.6e} m²")
+            permeability = result[f"k_{axis}_m2"]
+            permeability_text = (
+                f"{permeability:.6e} m²"
+                if permeability is not None
+                else "not available"
+            )
+            if result.get(f"converged_{axis}") is True:
+                status = "Converged"
+            elif result.get(f"converged_{axis}") is False:
+                status = str(result[f"termination_{axis}"])
+            else:
+                status = "Not evaluated"
+            iterations = result.get(f"iterations_{axis}", 0)
+            print(
+                f"k_{axis} = {permeability_text}; "
+                f"status = {status}; iterations = {iterations}"
+            )
         print(f"Saved: {args.output_dir / image_path.stem}", flush=True)
 
         if SAVE_EXCEL:

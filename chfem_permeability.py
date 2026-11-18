@@ -415,6 +415,17 @@ def process_permeability_folder(
         )
         row["vtk_path"] = result["vtk_path"]
         rows.append(row)
+        print(
+            f"Finished {image.name}: overall status = {row['overall_status']}"
+        )
+        for direction in "xyz":
+            permeability = row[f"permeability_{direction}_m2"]
+            print(
+                f"  k_{direction} = {permeability:.6e} m²; "
+                f"status = {row[f'status_{direction}']}; "
+                f"iterations = {row[f'iterations_{direction}']}; "
+                f"residual = {row[f'residual_{direction}']}"
+            )
         del domain
 
     results = pd.DataFrame(rows)
